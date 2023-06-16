@@ -1,27 +1,32 @@
 import csv
 from statistics import mean
-
+import sys
 import cv2
 import numpy as np
 import glob
 
 
-# Mouse function
+folder_name = sys.argv[1]
+file_extension = sys.argv[2]
 def select_point(event, x, y, flags, params):
     global point, point_selected, old_points, bbox
     if event == cv2.EVENT_LBUTTONDOWN:
         point = (x, y)
         point_selected = True
-        bbox = (x, y, 54, 46)
+        if folder_name == "Sylvestr":
+            w = 54
+            h = 46
+        else:
+            w = 30
+            h = 25
+        bbox = (x, y, w, h)
         old_points = np.array([[x, y]], dtype=np.float32)
         print("point", point)
 
 def calculate_iou(bbox1, bbox2):
-    # Oblicz współrzędne punktów prostokąta
     x1, y1, w1, h1 = bbox1
     x2, y2, w2, h2 = bbox2
 
-    # Oblicz współrzędne punktów przecięcia prostokątów
     x_left = max(x1, x2)
     y_top = max(y1, y2)
     x_right = min(x1 + w1, x2 + w2)
@@ -30,17 +35,15 @@ def calculate_iou(bbox1, bbox2):
     if x_right < x_left or y_bottom < y_top:
         return 0.0
 
-    # Oblicz powierzchnię przecięcia i sumę powierzchni obu prostokątów
     intersection_area = (x_right - x_left) * (y_bottom - y_top)
     bbox1_area = w1 * h1
     bbox2_area = w2 * h2
 
-    # Oblicz współczynnik IoU
     iou = intersection_area / float(bbox1_area + bbox2_area - intersection_area)
     return iou
 
 def calculate_ap(precision, recall):
-    sorted_indices = sorted(range(len(recall)), key=lambda i: recall[i])  # Indeksy posortowane rosnąco według odzysku
+    sorted_indices = sorted(range(len(recall)), key=lambda i: recall[i])
     sorted_recall = [recall[i] for i in sorted_indices]
     sorted_precision = [precision[i] for i in sorted_indices]
 
@@ -55,9 +58,9 @@ def calculate_ap(precision, recall):
 
 
 def calculate_precision_recall(gt_bboxes, pred_bboxes):
-    tp = 0  # Prawdziwie pozytywne
-    fp = 0  # Fałszywie pozytywne
-    fn = 0  # Fałszywie negatywne
+    tp = 0
+    fp = 0
+    fn = 0
 
     iou_scores = []
     precision_list = []
@@ -92,8 +95,8 @@ lk_params = dict(winSize=(15, 15),
                  maxLevel=4,
                  criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
-image_files = glob.glob("Sylvestr/*.png")  # Ścieżka do katalogu z obrazami
-gt_file = "Sylvestr/groundtruth.txt"  # Ścieżka do pliku gt.txt
+image_files = glob.glob(f"{folder_name}/*.{file_extension}")
+gt_file = f"{folder_name}/groundtruth.txt"
 background = cv2.imread(image_files[0])
 first_frame = cv2.imread(image_files[0])
 background_gray = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
@@ -110,7 +113,7 @@ while True:
     if point_selected:
         with open(gt_file, 'r') as file:
             gt_data = csv.reader(file, delimiter=',')
-            with open("results3.csv", 'w', newline='') as out_file:
+            with open("resultsLukas.csv", 'w', newline='') as out_file:
                 writer = csv.writer(out_file)
                 writer.writerow(["IoU"])
 
@@ -121,15 +124,15 @@ while True:
                     mask = cv2.medianBlur(mask, 5)
                     cv2.circle(frame, point, 5, (0, 0, 255), 2)
                     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-                    #mask = cv2.inRange(hsv, np.array((0, 139, 155)), np.array((24, 217, 219)))
-                    new_points, status, error = cv2.calcOpticalFlowPyrLK(old_gray, gray_frame, old_points, mask, **lk_params)
+                    new_points, status, error = cv2.calcOpticalFlowPyrLK(old_gray, gray_frame, old_points, mask,
+                                                                         **lk_params)
                     old_gray = gray_frame.copy()
                     old_points = new_points
                     x, y = new_points.ravel()
-                    bbox = (int(x - bbox[2] / 2), int(y - bbox[3] / 2), bbox[2], bbox[3])  # Aktualizacja bounding boxa
+                    bbox = (int(x - bbox[2] / 2), int(y - bbox[3] / 2), bbox[2], bbox[3])
                     point2 = np.intp((x, y))
                     cv2.circle(frame, point2, 5, (0, 255, 0), -1)
-                    gt_bbox = [int(coord) for coord in gt_bbox]
+                    gt_bbox = [int(float(coord)) for coord in gt_bbox]
                     cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]), (0, 255, 0), 2)
                     iou = calculate_iou(bbox, gt_bbox)
                     iou_str = str(iou).replace('.', ',')
@@ -161,7 +164,7 @@ print("Precision: {:.2f}". format(mean(precision)))
 print("Recall: {:.2f}". format(mean(recall)))
 print("AP: {:.2f}".format(ap))
 
-with open("resultsfinal3.csv", 'w', newline='') as out_file:
+with open("resultsfinalLukas.csv", 'w', newline='') as out_file:
     writer = csv.writer(out_file)
     writer.writerow(["IoU", "Precision", "Recall", "AP"])
     writer.writerow([mean(iou_final), mean(precision), mean(recall), ap])
